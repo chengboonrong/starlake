@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Starlake">
+<meta name="theme-color" content="#050817">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Starlake</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #050817;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  }
+  #safe { /* measures the notch / home-indicator insets so the HUD can stay clear of them */
+    position: fixed; inset: 0; visibility: hidden; pointer-events: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  canvas {
+    position: fixed; left: 0; top: 0;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    cursor: crosshair; touch-action: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Starlake: a living pixel-art lake under the stars"></canvas>
+<div id="safe"></div>
+<script>
+'use strict';
+(() => {
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d', { alpha: false });
+
+/* ───────────── math, colour, noise ───────────── */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const hex = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const bay = (x, y) => BAYER[((y & 3) << 2) | (x & 3)];
+
+function rng(a) {
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash(x, y, s) {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function noise(x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y, s, oct) {
+  let sum = 0, amp = 0.5, norm = 0;
+  for (let i = 0; i < oct; i++) { sum += amp * noise(x, y, s + i * 101); norm += amp; amp *= 0.5; x *= 2.03; y *= 2.03; }
+  return sum / norm;
+}
+
+/* ───────────── time-of-day palettes ───────────── */
+const PAL = {
+  night: {
+    skyT: '#050817', skyM: '#0c1739', skyH: '#22376a',
+    farL: '#3e5389', farS: '#27345f', midL: '#24315c', midS: '#182246',
+    nearL: '#151e3c', nearS: '#0e152d', treeL: '#131b37', treeS: '#080d1f',
+    snowL: '#c3d2f5', snowS: '#6c7eb4', water: '#071029', mist: '#34497c',
+    cloudL: '#55658f', cloudS: '#161d3b', mistA: 0.22, stars: 1, night: 1,
+  },
+  predawn: {
+    skyT: '#0d1236', skyM: '#3b2f6b', skyH: '#c0607a',
+    farL: '#5c5a8e', farS: '#3a3a6a', midL: '#3a3a68', midS: '#2a2a52',
+    nearL: '#23264a', nearS: '#191b38', treeL: '#181a38', treeS: '#0f1028',
+    snowL: '#eac4da', snowS: '#8a7aaa', water: '#1a1840', mist: '#8a6a9a',
+    cloudL: '#d47e9c', cloudS: '#3a2e5e', mistA: 0.45, stars: 0.45, night: 0.65,
+  },
+  sunrise: {
+    skyT: '#2c4a8e', skyM: '#d77a8a', skyH: '#ffc070',
+    farL: '#c492a0', farS: '#6c6292', midL: '#80708e', midS: '#4c4872',
+    nearL: '#4c4c64', nearS: '#2f3049', treeL: '#30364a', treeS: '#1c2132',
+    snowL: '#ffe2c4', snowS: '#b39ac2', water: '#3a4a7a', mist: '#f2b4a2',
+    cloudL: '#ffd2a2', cloudS: '#a46c8c', mistA: 0.5, stars: 0.04, night: 0.2,
+  },
+  morning: {
+    skyT: '#3d7ad0', skyM: '#8ec0ee', skyH: '#e6eef0',
+    farL: '#a3bcd8', farS: '#7a92bc', midL: '#6e8f7e', midS: '#4a6a6a',
+    nearL: '#457352', nearS: '#2c503e', treeL: '#2d553a', treeS: '#1a3628',
+    snowL: '#ffffff', snowS: '#b8cce4', water: '#3a6aa0', mist: '#dae8f0',
+    cloudL: '#ffffff', cloudS: '#b6c6de', mistA: 0.22, stars: 0, night: 0,
+  },
+  noon: {
+    skyT: '#2e6ed6', skyM: '#6cb0f0', skyH: '#c6e4f8',
+    farL: '#a6c0dc', farS: '#7896c0', midL: '#72a07e', midS: '#4c7466',
+    nearL: '#4a7e50', nearS: '#2e5840', treeL: '#30603c', treeS: '#1c3e2a',
+    snowL: '#ffffff', snowS: '#c0d4ec', water: '#2e66a8', mist: '#e0f0ff',
+    cloudL: '#ffffff', cloudS: '#c2d2ea', mistA: 0.08, stars: 0, night: 0,
+  },
+  afternoon: {
+    skyT: '#3a66b8', skyM: '#8aa8d8', skyH: '#f0d8a8',
+    farL: '#c4aea4', farS: '#8a8ab0', midL: '#8e8e6c', midS: '#5a6a6a',
+    nearL: '#5e6e42', nearS: '#3a4a3a', treeL: '#3c4c2f', treeS: '#243224',
+    snowL: '#fff0d8', snowS: '#c0b8d0', water: '#4a6a98', mist: '#f0e0c0',
+    cloudL: '#fff0d0', cloudS: '#c0a8b8', mistA: 0.14, stars: 0, night: 0,
+  },
+  sunset: {
+    skyT: '#2a2a6a', skyM: '#c8507a', skyH: '#ff9a40',
+    farL: '#c46c6a', farS: '#6a4a7a', midL: '#7c4a62', midS: '#4a3458',
+    nearL: '#4c2e48', nearS: '#2e2038', treeL: '#30203a', treeS: '#1c1428',
+    snowL: '#ffc4a2', snowS: '#a07090', water: '#4a2e5e', mist: '#e08070',
+    cloudL: '#ffa070', cloudS: '#7a3a6a', mistA: 0.32, stars: 0.08, night: 0.3,
+  },
+  dusk: {
+    skyT: '#0e1236', skyM: '#3a2a64', skyH: '#9a4a6e',
+    farL: '#4c406e', farS: '#30285a', midL: '#2e2850', midS: '#221e42',
+    nearL: '#1c1a36', nearS: '#14132a', treeL: '#14142a', treeS: '#0c0c1e',
+    snowL: '#caaad8', snowS: '#6a5a90', water: '#1a1640', mist: '#5a4a7a',
+    cloudL: '#8a5a8a', cloudS: '#2a2048', mistA: 0.3, stars: 0.6, night: 0.85,
+  },
+};
+const PALS = {};
+for (const k in PAL) {
+  const o = {};
+  for (const f in PAL[k]) o[f] = typeof PAL[k][f] === 'string' ? hex(PAL[k][f]) : PAL[k][f];
+  PALS[k] = o;
+}
+const KEYS = [
+  [0, 'night'], [4.8, 'night'], [5.6, 'predawn'], [6.4, 'sunrise'], [7.8, 'morning'],
+  [12.5, 'noon'], [16.4, 'afternoon'], [18.1, 'sunset'], [19.0, 'dusk'], [19.9, 'night'], [24, 'night'],
+];
+function paletteAt(h) {
+  let i = 0;
+  while (i < KEYS.length - 2 && h >= KEYS[i + 1][0]) i++;
+  const [h0, a] = KEYS[i], [h1, b] = KEYS[i + 1];
+  const t = smooth(0, 1, (h - h0) / (h1 - h0));
+  const A = PALS[a], B = PALS[b], o = {};
+  for (const f in A) o[f] = Array.isArray(A[f]) ? mix(A[f], B[f], t) : A[f] + (B[f] - A[f]) * t;
+  return o;
+}
+const WARM = [255, 198, 108], WOOD = [118, 76, 48], ROOF = [92, 52, 44];
+
+/* ───────────── state & URL params ───────────── */
+const SPEEDS = [1, 20, 120, 600];
+const params = new URLSearchParams(location.hash.slice(1));
+let seed = parseInt(params.get('seed'), 10) || ((Math.random() * 1e9) | 0);
+let hour = params.has('t') ? ((parseFloat(params.get('t')) % 24) + 24) % 24 : 22;
+let speedIdx = params.has('speed') ? Math.max(0, SPEEDS.indexOf(+params.get('speed'))) : 1;
+let paused = params.get('paused') === '1';
+let live = params.get('live') === '1';
+let auroraOn = params.get('aurora') !== '0';
+let cloudLevel = params.has('clouds') ? clamp(parseInt(params.get('clouds'), 10) || 0, 0, 2) : 1;
+let showHelp = params.get('help') === '1';
+let lastInput = 0, toast = null, scrub = 0, curP = null;
+
+// Real moon phase for today (0 new, 0.5 full), floored to a thin crescent so the lake always has a moon path.
+const SYNODIC = 29.530588853;
+const moonPhase = params.has('moon') ? +params.get('moon') % 1
+  : ((((Date.now() / 864e5 - 10962.76) / SYNODIC) % 1) + 1) % 1;
+let moonTheta = moonPhase * Math.PI * 2;
+if ((1 - Math.cos(moonTheta)) / 2 < 0.18) {
+  const th = Math.acos(1 - 2 * 0.18);
+  moonTheta = moonPhase < 0.5 ? th : Math.PI * 2 - th;
+}
+const moonIllum = (1 - Math.cos(moonTheta)) / 2;
+
+let W = 0, H = 0, S = 1, HZ = 0, lakeH = 0, img, D;
+let inset = { t: 0, r: 0, b: 0, l: 0 }; // safe-area insets in art pixels
+let lay, face, ridge, MW, cabin, stars, reeds, flies;
+let smoke = [], ripples = [], meteors = [], flocks = [];
+let aBase, aStr, aLen;
+
+/* ───────────── pixel helpers ───────────── */
+function put(x, y, c) {
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const i = (y * W + x) << 2;
+  D[i] = c[0]; D[i + 1] = c[1]; D[i + 2] = c[2];
+}
+function blend(x, y, c, a) {
+  if (a <= 0 || x < 0 || y < 0 || x >= W || y >= H) return;
+  const i = (y * W + x) << 2, k = a > 1 ? 1 : a;
+  D[i] += (c[0] - D[i]) * k; D[i + 1] += (c[1] - D[i + 1]) * k; D[i + 2] += (c[2] - D[i + 2]) * k;
+}
+// ordered-dither blend: alpha is quantised to `lv` steps through the Bayer matrix
+function dith(x, y, c, a, lv) {
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const q = Math.floor(a * lv + bay(x, y)) / lv;
+  if (q > 0) blend(x, y, c, q);
+}
+
+/* ───────────── world generation ───────────── */
+function setup() {
+  const dpr = window.devicePixelRatio || 1;
+  const dw = Math.round(innerWidth * dpr), dh = Math.round(innerHeight * dpr);
+  S = Math.max(1, Math.floor(Math.min(dw, dh) / 165));
+  W = Math.ceil(dw / S); H = Math.ceil(dh / S);
+  HZ = Math.round(H * 0.6); lakeH = H - HZ;
+  const cs = getComputedStyle(document.getElementById('safe')), art = v => Math.ceil(((parseFloat(v) || 0) * dpr) / S);
+  inset = { t: art(cs.paddingTop), r: art(cs.paddingRight), b: art(cs.paddingBottom), l: art(cs.paddingLeft) };
+  cv.width = W; cv.height = H;
+  cv.style.width = (W * S) / dpr + 'px';
+  cv.style.height = (H * S) / dpr + 'px';
+  img = ctx.createImageData(W, H); D = img.data;
+  for (let i = 3; i < D.length; i += 4) D[i] = 255;
+  aBase = new Float32Array(W); aStr = new Float32Array(W); aLen = new Float32Array(W);
+  generate();
+}
+
+function generate() {
+  const R = rng(seed);
+  const sF = (seed % 9973) + 11, sM = sF + 23, sN = sF + 37, sT = sF + 51, sJ = sF + 67;
+  const N = W * HZ, xo = R() * 1000;
+  lay = new Uint8Array(N); face = new Float32Array(N); ridge = new Uint8Array(N);
+  const hFar = new Float32Array(W), hMid = new Float32Array(W), hNear = new Float32Array(W);
+
+  // one hero peak, off-centre
+  const heroX = W * (R() < 0.5 ? 0.2 + R() * 0.18 : 0.62 + R() * 0.18);
+  const heroH = 16 + R() * 16, heroW = 26 + R() * 22;
+  for (let x = 0; x < W; x++) {
+    let r = 0, a = 1, f = 0.011, n = 0;
+    for (let o = 0; o < 5; o++) { // ridged multifractal
+      const v = 1 - Math.abs(noise((x + xo) * f, o * 7.31, sF) * 2 - 1);
+      r += v * v * a; n += a; a *= 0.5; f *= 2.1;
+    }
+    r /= n;
+    hFar[x] = Math.min(HZ - 12, 10 + r * 40 + heroH * Math.exp(-(((x - heroX) / heroW) ** 2)));
+    hMid[x] = 5 + Math.max(0, fbm((x + xo) * 0.016, 3.7, sM, 4) - 0.3) * 48;
+    const e = Math.abs(x / W - 0.5) * 2;
+    hNear[x] = smooth(0.32, 0.95, e) * (4 + fbm((x + xo) * 0.03, 8.1, sN, 3) * 20);
+  }
+
+  // cabin: flattest spot on one of the framing hills
+  cabin = null;
+  const left = R() < 0.5;
+  const a0 = Math.floor(W * (left ? 0.07 : 0.74)), a1 = Math.floor(W * (left ? 0.26 : 0.93));
+  let best = -1, bestScore = 1e9;
+  for (let x = a0; x < a1; x++) {
+    if (hNear[x] < 4) continue;
+    const sc = Math.abs(hNear[Math.min(W - 1, x + 7)] - hNear[Math.max(0, x - 7)]) + Math.abs(x - (a0 + a1) / 2) * 0.05;
+    if (sc < bestScore) { bestScore = sc; best = x; }
+  }
+  if (best >= 0) {
+    const h0 = Math.round(hNear[best]);
+    for (let x = best - 12; x <= best + 12; x++) if (x >= 0 && x < W) {
+      const k = smooth(12, 7, Math.abs(x - best));
+      hNear[x] = hNear[x] * (1 - k) + h0 * k;
+    }
+    cabin = { x: best, y: HZ - h0 };
+  }
+
+  const slope = (h, x, w) => (h[Math.min(W - 1, x + w)] - h[Math.max(0, x - w)]) / (2 * w);
+  // Each pixel stores which way its rock face points; deeper pixels read the slope at a coarser
+  // scale, so small crags near the ridge merge into broad faces lower down.
+  const fill = (h, code, s, rough) => {
+    for (let x = 0; x < W; x++) {
+      const t0 = HZ - Math.round(h[x]);
+      for (let y = Math.max(0, t0); y < HZ; y++) {
+        const d = y - t0, i = y * W + x;
+        const j = Math.round((noise(x * 0.35, y * 0.35, s) - 0.5) * Math.min(d, 12) * rough);
+        const w = d < 3 ? 1 : d < 9 ? 3 : 7;
+        lay[i] = code; face[i] = clamp(-slope(h, clamp(x + j, 0, W - 1), w) * 3, -1, 1); ridge[i] = d === 0 ? 1 : 0;
+      }
+    }
+  };
+  fill(hFar, 1, sF + 1, 0.9);
+  const snowLine = 28 + R() * 6;
+  for (let x = 0; x < W; x++) {
+    const ex = hFar[x] - snowLine;
+    if (ex <= 0) continue;
+    const t0 = HZ - Math.round(hFar[x]), depth = ex * 0.6 + 1;
+    for (let y = t0; y < HZ && y - t0 <= depth * 1.6; y++) {
+      if (y - t0 < depth * (0.45 + noise(x * 0.45, y * 0.3, sF + 5))) lay[y * W + x] = 5;
+    }
+  }
+  fill(hMid, 2, sM + 1, 0.6);
+  for (let x = 0; x < W; x++) { // distant conifer line on the far shore
+    const th = Math.round(1 + noise(x * 0.07, 0.5, sT) * 3 + hash(x, 3, sT) * 1.8 + (hash(x, 4, sT) < 0.18 ? 1.5 : 0));
+    for (let y = HZ - th; y < HZ; y++) { const i = y * W + x; lay[i] = 10; face[i] = 0; ridge[i] = y === HZ - th ? 1 : 0; }
+  }
+  fill(hNear, 3, sN + 1, 0.4);
+
+  const pine = (cx, by, th) => {
+    for (let i = 0; i < th; i++) {
+      const y = by - th + i;
+      if (y < 0 || y >= HZ) continue;
+      const hw = Math.floor(i * 0.42 + (i % 3 === 2 ? 0.45 : 0));
+      for (let dx = -hw; dx <= hw; dx++) {
+        const x = cx + dx;
+        if (x < 0 || x >= W) continue;
+        const k = y * W + x; lay[k] = 4; face[k] = hw ? dx / hw : 0; ridge[k] = 0;
+      }
+    }
+    for (let y = by; y < Math.min(HZ, by + 2); y++) if (cx >= 0 && cx < W) { const k = y * W + cx; lay[k] = 4; face[k] = 0; }
+  };
+  for (let x = (R() * 3) | 0; x < W; x += 2 + ((R() * 3) | 0)) {
+    if (hNear[x] < 1.5 || (cabin && Math.abs(x - cabin.x) < 10)) continue;
+    const e = Math.abs(x / W - 0.5) * 2;
+    pine(x, HZ - Math.round(hNear[x]) + 1, Math.round(4 + R() * 5 + e * e * R() * 9));
+  }
+
+  if (cabin) {
+    const SPR = [
+      '......R..C...',
+      '.....RRR.C...',
+      '....RRRRRC...',
+      '...RRRRRRR...',
+      '..RRRRRRRRR..',
+      '.RRRRRRRRRRR.',
+      '..WWWWWWWWW..',
+      '..WGGWWWWDW..',
+      '..WGGWWWWDW..',
+      '..WWWWWWWDW..',
+    ];
+    const CODE = { R: 7, W: 6, G: 8, D: 9, C: 9 };
+    const ox = cabin.x - 6, oy = cabin.y - SPR.length;
+    SPR.forEach((row, r) => [...row].forEach((ch, c) => {
+      const code = CODE[ch], x = ox + c, y = oy + r;
+      if (!code || x < 0 || x >= W || y < 0 || y >= HZ) return;
+      const k = y * W + x;
+      lay[k] = code; ridge[k] = 0;
+      face[k] = code === 7 ? (c < 6 ? -1 : c > 6 ? 1 : 0) : code === 6 ? (r % 2 ? 1 : -1) : 0;
+    }));
+    cabin.chim = { x: ox + 9, y: oy - 1 };
+    cabin.win = { x: ox + 3.5, y: oy + 7.5 };
+  }
+
+  // Milky Way: a tilted band with mottled texture and a dark dust rift
+  MW = new Float32Array(N);
+  const ang = -0.5 - R() * 0.9, ca = Math.cos(ang), sa = Math.sin(ang);
+  const mcx = W * (0.35 + R() * 0.3), mcy = HZ * 0.45, sig = HZ * 0.16;
+  for (let y = 0; y < HZ; y++) for (let x = 0; x < W; x++) {
+    const dd = -(x - mcx) * sa + (y - mcy) * ca, along = (x - mcx) * ca + (y - mcy) * sa;
+    const band = Math.exp(-((dd / sig) ** 2));
+    if (band < 0.02) continue;
+    const tex = fbm(x * 0.06, y * 0.06, sJ, 4);
+    const rift = Math.exp(-(((dd + sig * 0.1) / (sig * 0.22)) ** 2)) * smooth(0.35, 0.65, fbm(along * 0.04, dd * 0.05, sJ + 9, 3));
+    MW[y * W + x] = clamp(band * (0.2 + 1.1 * tex) * (1 - 0.85 * rift), 0, 1);
+  }
+
+  stars = [];
+  const SC = [[255, 255, 255], [205, 222, 255], [170, 198, 255], [255, 240, 205], [255, 205, 170]];
+  const cnt = Math.floor((W * HZ) / 30);
+  for (let k = 0; k < cnt; k++) {
+    let x = 0, y = 0;
+    for (let tries = 0; tries < 8; tries++) {
+      x = (R() * W) | 0; y = (R() * (HZ - 4)) | 0;
+      if (k % 2 === 0 || R() < MW[y * W + x] * 1.3) break; // half the stars crowd into the Milky Way
+    }
+    const m = R(), ci = R();
+    stars.push({
+      x, y,
+      b: m < 0.8 ? 0.18 + R() * 0.35 : m < 0.96 ? 0.55 + R() * 0.35 : 1,
+      c: ci < 0.55 ? SC[0] : ci < 0.75 ? SC[1] : ci < 0.85 ? SC[2] : ci < 0.94 ? SC[3] : SC[4],
+      big: m > 0.985, sp: 0.6 + R() * 2.6, ph: R() * 6.28,
+    });
+  }
+
+  reeds = [];
+  const clump = (x0, x1, n, fromLeft) => {
+    for (let k = 0; k < n; k++) {
+      const x = x0 + R() * (x1 - x0), u = (x - x0) / (x1 - x0), e = fromLeft ? 1 - u : u;
+      reeds.push({
+        x, h: Math.round(8 + R() * 14 + e * 22 * R()), lean: (R() - 0.5) * 7 + (fromLeft ? 2 : -2),
+        ph: R() * 6.28, cat: R() < 0.32, blade: R() < 0.45,
+      });
+    }
+  };
+  clump(-3, W * 0.17, Math.round(W * 0.07), true);
+  clump(W * 0.85, W + 3, Math.round(W * 0.06), false);
+
+  flies = [];
+  for (let k = 0; k < 26; k++) {
+    const side = k % 2 ? R() * 0.3 : 0.7 + R() * 0.3;
+    flies.push({ x: side * W, y: HZ - 2 - R() * 20, ph: R() * 6.28, f: 1.4 + R() * 2.4, s: R() * 100 });
+  }
+  smoke = []; ripples = []; meteors = []; flocks = [];
+}
+
+/* ───────────── celestial bodies ───────────── */
+function body(frac) {
+  const alt = Math.sin(frac * Math.PI);
+  return { alt, x: W * (0.06 + 0.88 * frac), y: HZ + 3 - alt * HZ * 0.74 };
+}
+
+/* ───────────── sky ───────────── */
+function renderSky(P, t, sun, moon) {
+  const NB = 12, bands = [];
+  for (let k = 0; k < NB; k++) {
+    const v = k / (NB - 1);
+    bands.push(v < 0.55 ? mix(P.skyT, P.skyM, v / 0.55) : mix(P.skyM, P.skyH, (v - 0.55) / 0.45));
+  }
+  const glows = [];
+  if (sun.alt > -0.3) {
+    const low = 1 - smooth(0, 0.45, sun.alt), sg = 16 + 22 * low;
+    glows.push({ x: sun.x, y: sun.y, ix: 1 / (sg * sg), iy: 1 / (sg * sg), A: 0.5 * smooth(-0.25, 0.05, sun.alt), c: mix([255, 246, 220], [255, 150, 80], low) });
+    const A2 = 0.6 * smooth(-0.3, 0, sun.alt) * (1 - smooth(0.04, 0.3, sun.alt));
+    if (A2 > 0.01) { const gx = W * 0.35, gy = HZ * 0.3; glows.push({ x: sun.x, y: HZ, ix: 1 / (gx * gx), iy: 1 / (gy * gy), A: A2, c: [255, 120, 70] }); }
+  }
+  if (moon.alt > -0.1) {
+    const A = smooth(-0.1, 0.06, moon.alt) * Math.sqrt(moonIllum) * (0.3 + 0.7 * P.stars);
+    glows.push({ x: moon.x, y: moon.y, ix: 1 / 120, iy: 1 / 120, A: 0.22 * A, c: [130, 160, 255] });
+    glows.push({ x: moon.x, y: moon.y, ix: 1 / 900, iy: 1 / 900, A: 0.1 * A, c: [110, 140, 240] });
+  }
+
+  // aurora curtains: a wandering base line per column, with shimmering vertical rays
+  const aI = auroraOn ? smooth(0.5, 0.95, P.stars) * (0.45 + 0.55 * smooth(0.25, 0.75, noise(t * 0.012, 0.5, 99))) : 0;
+  if (aI > 0.01) for (let x = 0; x < W; x++) {
+    aBase[x] = HZ * 0.36 + Math.sin(x * 0.021 + t * 0.05) * HZ * 0.08 + Math.sin(x * 0.051 - t * 0.08 + 2) * HZ * 0.045
+      + Math.sin(x * 0.13 + t * 0.21) * 2.2 + (noise(x * 0.09, t * 0.1, 76) - 0.5) * 5;
+    const patch = smooth(0.3, 0.75, noise(x * 0.014 + t * 0.01, 3.3, 77)) * (0.55 + 0.45 * noise(x * 0.06 - t * 0.03, 4.4, 75));
+    const ray = 0.35 + 0.65 * noise(x * 0.3 + t * 0.35, t * 0.3, 78);
+    aStr[x] = patch * ray * aI * 0.6;
+    aLen[x] = 12 + 26 * noise(x * 0.035 - t * 0.04, 1.1, 79);
+  }
+
+  const mwA = P.stars * 0.32, NG = glows.length;
+  for (let y = 0; y < HZ; y++) {
+    const f = (y / (HZ - 1)) * (NB - 1), b0 = f | 0, fr = f - b0;
+    const ca = bands[b0], cb = bands[Math.min(NB - 1, b0 + 1)];
+    const hf = smooth(0, HZ * 0.35, HZ - y);
+    let i = y * W, o = i << 2;
+    for (let x = 0; x < W; x++, i++, o += 4) {
+      const bv = BAYER[((y & 3) << 2) | (x & 3)];
+      const c = fr > bv ? cb : ca;
+      let r = c[0], g = c[1], b = c[2];
+      for (let k = 0; k < NG; k++) {
+        const G = glows[k], dx = x - G.x, dy = y - G.y;
+        const e = G.A * Math.exp(-(dx * dx * G.ix + dy * dy * G.iy));
+        if (e > 0.004) { const q = Math.floor(e * 10 + bv) / 10; r += G.c[0] * q; g += G.c[1] * q; b += G.c[2] * q; }
+      }
+      if (mwA > 0.01) {
+        const m = MW[i];
+        if (m > 0) { const q = Math.floor(m * mwA * hf * 12 + bv) / 12; r += 150 * q; g += 158 * q; b += 205 * q; }
+      }
+      if (aI > 0.01 && aStr[x] > 0.01) {
+        const up = aBase[x] - y;
+        if (up > -4) {
+          let e = aStr[x] * (up >= 0 ? Math.exp(-up / aLen[x]) : Math.exp(up * 0.8) + 0.22 * Math.exp(up / 16)) * hf;
+          if (up >= 0 && up < 2.5) e *= 1.35;
+          if (e > 0.01) {
+            const u = clamp(up / 42, 0, 1);
+            let cr, cg, cbb;
+            if (u < 0.45) { const k = u / 0.45; cr = 70 - 20 * k; cg = 255 - 50 * k; cbb = 150 + 60 * k; }
+            else { const k = (u - 0.45) / 0.55; cr = 50 + 130 * k; cg = 205 - 125 * k; cbb = 210 + 45 * k; }
+            const q = Math.floor(e * 7 + bv) / 7;
+            r += cr * q; g += cg * q; b += cbb * q;
+          }
+        }
+      }
+      D[o] = r; D[o + 1] = g; D[o + 2] = b;
+    }
+  }
+}
+
+function drawStars(P, t) {
+  const A = P.stars;
+  if (A < 0.02) return;
+  for (const s of stars) {
+    if (s.y >= HZ) continue;
+    const hf = 0.25 + 0.75 * smooth(0, HZ * 0.35, HZ - s.y);
+    const tw = 0.6 + 0.4 * Math.sin(t * s.sp + s.ph) * Math.sin(t * s.sp * 0.31 + s.ph * 1.7);
+    const a = s.b * tw * A * hf;
+    blend(s.x, s.y, s.c, a);
+    if (s.big) {
+      const a2 = a * 0.4;
+      blend(s.x - 1, s.y, s.c, a2); blend(s.x + 1, s.y, s.c, a2);
+      blend(s.x, s.y - 1, s.c, a2); blend(s.x, s.y + 1, s.c, a2);
+    }
+  }
+}
+
+function spawnMeteor(x, y, big) {
+  const dir = Math.random() < 0.5 ? -1 : 1, ang = 0.3 + Math.random() * 0.6, sp = 110 + Math.random() * 120;
+  meteors.push({
+    x, y, vx: Math.cos(ang) * sp * dir, vy: Math.sin(ang) * sp, age: 0,
+    life: 0.45 + Math.random() * 0.6 + (big ? 0.4 : 0), len: 9 + Math.random() * 12 + (big ? 10 : 0), big,
+  });
+}
+function drawMeteors(P, dt) {
+  const vis = Math.max(P.stars, 0.4);
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    const m = meteors[i];
+    m.age += dt; m.x += m.vx * dt; m.y += m.vy * dt;
+    if (m.age > m.life) { meteors.splice(i, 1); continue; }
+    const fade = Math.min(1, m.age / 0.06) * (1 - smooth(0.55, 1, m.age / m.life));
+    const sp = Math.hypot(m.vx, m.vy), ux = m.vx / sp, uy = m.vy / sp;
+    const tail = m.big ? [190, 255, 214] : [200, 215, 255];
+    for (let k = 0; k <= m.len; k++) {
+      const x = Math.round(m.x - ux * k), y = Math.round(m.y - uy * k);
+      if (y < 0 || y >= HZ) continue;
+      const a = fade * vis * Math.pow(1 - k / m.len, 1.6);
+      blend(x, y, k < 2 ? [255, 255, 255] : tail, a);
+      if (m.big && k < 5) { blend(x, y - 1, tail, a * 0.4); blend(x, y + 1, tail, a * 0.4); }
+    }
+  }
+}
+
+function drawSun(s) {
+  if (s.alt < -0.1) return;
+  const low = 1 - smooth(0, 0.35, s.alt), R = 6, cx = Math.round(s.x), cy = Math.round(s.y);
+  const core = mix([255, 253, 240], [255, 200, 120], low), edge = mix([255, 238, 180], [255, 140, 70], low);
+  for (let dy = -R - 1; dy <= R + 1; dy++) for (let dx = -R - 1; dx <= R + 1; dx++) {
+    const x = cx + dx, y = cy + dy;
+    if (y < 0 || y >= HZ) continue;
+    const d = Math.hypot(dx, dy);
+    if (d <= R - 1.2) put(x, y, core);
+    else if (d <= R + 0.3) put(x, y, edge);
+    else if (d <= R + 1.2) dith(x, y, edge, 0.5, 2);
+  }
+}
+
+function drawMoon(m, P) {
+  if (m.alt < -0.05) return;
+  const R = 6, cx = Math.round(m.x), cy = Math.round(m.y);
+  const vis = 0.35 + 0.65 * smooth(0.05, 0.6, P.stars);
+  const lit = [238, 242, 252], mare = [176, 186, 214], earth = mix(P.skyT, [70, 84, 130], 0.4);
+  const Lx = Math.sin(moonTheta), Lz = -Math.cos(moonTheta);
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const x = cx + dx, y = cy + dy;
+    if (y < 0 || y >= HZ || x < 0 || x >= W) continue;
+    const nx = dx / (R + 0.5), ny = dy / (R + 0.5), rr = nx * nx + ny * ny;
+    if (rr > 1) continue;
+    const l = nx * Lx + Math.sqrt(1 - rr) * Lz;
+    if (l > 0.08 || (l > -0.08 && (l + 0.08) / 0.16 > bay(x, y))) {
+      let c = fbm(nx * 1.8 + 4.2, ny * 1.8 + 2.7, 909, 2) > 0.56 ? mare : lit;
+      if (rr > 0.72) c = mix(c, mare, 0.3);
+      blend(x, y, c, vis);
+    } else if (P.stars > 0.3) blend(x, y, earth, 0.9);
+  }
+}
+
+function drawClouds(P, t) {
+  if (!cloudLevel) return;
+  const th = cloudLevel === 1 ? 0.6 : 0.47;
+  const y0 = (HZ * 0.04) | 0, y1 = (HZ * 0.78) | 0, drift = t * 0.018, cs = (seed % 997) + 300;
+  for (let y = y0; y < y1; y++) {
+    const mask = smooth(y0, y0 + HZ * 0.18, y) * (1 - smooth(y1 - HZ * 0.25, y1, y));
+    if (mask <= 0) continue;
+    for (let x = 0; x < W; x++) {
+      const nx = x * 0.014 + drift, ny = y * 0.065;
+      const n = fbm(nx, ny, cs, 4);
+      const dens = smooth(th, th + 0.15, n) * mask;
+      if (dens < 0.04) continue;
+      const lit = clamp(0.55 + (n - fbm(nx, ny - 0.18, cs, 4)) * 7, 0, 1); // denser than above = top edge = lit
+      const bv = bay(x, y);
+      const q = Math.floor(dens * 3 + bv) / 3;
+      if (q > 0) blend(x, y, lit > bv ? P.cloudL : P.cloudS, q);
+    }
+  }
+}
+
+/* ───────────── land ───────────── */
+function drawTerrain(P, t, lb) {
+  const lx = clamp((lb.x / W - 0.5) * 2, -1, 1);
+  const sg = lx >= 0 ? 1 : -1, k = clamp(Math.abs(lx) * 1.4, 0.3, 1);
+  const pair = (L, Sd) => { const M = mix(L, Sd, 0.5); return [mix(M, L, k), mix(M, Sd, k)]; };
+  const day = 1 - P.night, C = [], rim = [];
+  C[1] = pair(P.farL, P.farS); C[2] = pair(P.midL, P.midS); C[3] = pair(P.nearL, P.nearS);
+  C[4] = pair(P.treeL, P.treeS); C[5] = pair(P.snowL, P.snowS);
+  const dtl = mix(P.midS, P.nearS, 0.55);
+  C[10] = [mix(dtl, P.midL, 0.25), dtl];
+  C[6] = [mix(P.nearL, WOOD, 0.12 + 0.5 * day), mix(P.nearS, WOOD, 0.08 + 0.38 * day)];
+  C[7] = pair(mix(P.treeL, ROOF, 0.1 + 0.45 * day), mix(P.treeS, ROOF, 0.05 + 0.3 * day));
+  for (const L of [1, 2, 3, 10]) rim[L] = mix(C[L][0], P.skyH, 0.35);
+  rim[5] = mix(C[5][0], [255, 255, 255], 0.3);
+  const glowW = smooth(0.35, 0.8, P.night) * (0.85 + 0.15 * noise(t * 4, 0, 5));
+  const win = mix(mix(P.treeS, P.skyM, 0.35), WARM, glowW), door = mix(P.treeS, [0, 0, 0], 0.3);
+
+  for (let y = 0, i = 0; y < HZ; y++) for (let x = 0; x < W; x++, i++) {
+    const L = lay[i];
+    if (!L) continue;
+    let c;
+    if (L === 8) c = win;
+    else if (L === 9) c = door;
+    else if (L === 6) c = face[i] > 0 ? C[6][0] : C[6][1];
+    else {
+      const f = face[i] * sg;
+      c = clamp(f * 2.6 + 0.5, 0, 1) > BAYER[((y & 3) << 2) | (x & 3)] ? C[L][0] : C[L][1];
+      if (ridge[i] && f > -0.25 && rim[L]) c = rim[L];
+    }
+    const o = i << 2;
+    D[o] = c[0]; D[o + 1] = c[1]; D[o + 2] = c[2];
+  }
+  if (cabin && glowW > 0.05) {
+    for (let dy = -5; dy <= 5; dy++) for (let dx = -6; dx <= 6; dx++) {
+      const x = Math.round(cabin.win.x + dx), y = Math.round(cabin.win.y + dy);
+      if (x < 0 || x >= W || y < 0 || y >= HZ || lay[y * W + x] === 8) continue;
+      const dd = Math.hypot(dx, dy * 1.2) / 6;
+      if (dd < 1) dith(x, y, WARM, (1 - dd) ** 2 * 0.45 * glowW, 4);
+    }
+  }
+}
+
+let nextSmoke = 0;
+function drawSmoke(P, t, dt) {
+  if (cabin && t > nextSmoke) {
+    nextSmoke = t + 0.18;
+    smoke.push({ x: cabin.chim.x + 0.5, y: cabin.chim.y, vx: (Math.random() - 0.5) * 0.6, vy: -(2.6 + Math.random() * 1.6), age: 0, life: 5 + Math.random() * 3 });
+  }
+  const col = mix(P.cloudS, P.cloudL, 0.55), wind = 1.4 + Math.sin(t * 0.13) * 0.8;
+  for (let i = smoke.length - 1; i >= 0; i--) {
+    const p = smoke[i];
+    p.age += dt;
+    if (p.age > p.life) { smoke.splice(i, 1); continue; }
+    const u = p.age / p.life;
+    p.x += (p.vx + wind * u * 2.5) * dt; p.y += p.vy * dt * (1 - u * 0.5);
+    const a = (1 - u) * 0.55 * smooth(0, 0.08, u), x = Math.round(p.x), y = Math.round(p.y);
+    dith(x, y, col, a, 3);
+    if (u > 0.3) dith(x + 1, y, col, a * 0.7, 3);
+    if (u > 0.55) dith(x, y - 1, col, a * 0.5, 3);
+  }
+}
+
+function drawFlies(P, t, dt) {
+  const vis = smooth(0.55, 0.9, P.night);
+  if (vis <= 0) return;
+  for (const f of flies) {
+    f.x += (noise(t * 0.25, f.s, 61) - 0.5) * 9 * dt;
+    f.y += (noise(t * 0.25, f.s + 40, 62) - 0.5) * 5 * dt;
+    const u = f.x / W;
+    if (u > 0.3 && u < 0.7) f.x += (u < 0.5 ? -3 : 3) * dt; // stay near the wooded shores
+    f.x = clamp(f.x, 0, W - 1); f.y = clamp(f.y, HZ - 24, HZ - 2);
+    const b = Math.pow(Math.max(0, Math.sin(t * f.f + f.ph)), 5) * vis;
+    if (b < 0.03) continue;
+    const x = Math.round(f.x), y = Math.round(f.y), g = [170, 230, 80];
+    blend(x, y, [236, 255, 140], b);
+    if (b > 0.45) { blend(x - 1, y, g, b * 0.3); blend(x + 1, y, g, b * 0.3); blend(x, y - 1, g, b * 0.3); blend(x, y + 1, g, b * 0.3); }
+  }
+}
+
+function spawnFlock(x, y) {
+  const dir = x === undefined ? (Math.random() < 0.5 ? 1 : -1) : x < W / 2 ? 1 : -1;
+  const n = 3 + ((Math.random() * 5) | 0), m = [];
+  for (let k = 0; k < n; k++) { const row = Math.ceil(k / 2), side = k % 2 ? 1 : -1; m.push({ ox: -dir * row * 4, oy: side * row * 2 }); }
+  flocks.push({
+    x: x === undefined ? (dir > 0 ? -10 : W + 10) : x, y: y === undefined ? HZ * (0.2 + Math.random() * 0.4) : y,
+    dir, sp: 14 + Math.random() * 8, m, ph: Math.random() * 6,
+  });
+}
+function drawBirds(P, t, dt) {
+  const c = mix(P.treeS, P.skyM, 0.15);
+  for (let i = flocks.length - 1; i >= 0; i--) {
+    const f = flocks[i];
+    f.x += f.dir * f.sp * dt;
+    if ((f.dir > 0 && f.x > W + 40) || (f.dir < 0 && f.x < -40)) { flocks.splice(i, 1); continue; }
+    f.m.forEach((b, k) => {
+      const x = Math.round(f.x + b.ox), y = Math.round(f.y + b.oy + Math.sin(t * 1.3 + k) * 0.8);
+      if (y < 1 || y >= HZ) return;
+      put(x, y, c);
+      if (((t * 6 + k * 0.7 + f.ph) | 0) % 2 === 0) { put(x - 1, y - 1, c); put(x + 1, y - 1, c); }
+      else { put(x - 1, y, c); put(x + 1, y, c); }
+    });
+  }
+}
+
+function drawMist(P, t) {
+  const A = P.mistA;
+  if (A < 0.02) return;
+  const y0 = HZ - 16;
+  for (let y = Math.max(0, y0); y < HZ; y++) {
+    const vy = smooth(y0, HZ, y);
+    for (let x = 0; x < W; x++) {
+      const a = A * vy * (0.35 + 0.9 * noise(x * 0.035 - t * 0.04, y * 0.18 + t * 0.01, 71));
+      const q = Math.floor(a * 4 + bay(x, y)) / 4;
+      if (q > 0) { const i = (y * W + x) << 2; D[i] += (P.mist[0] - D[i]) * q; D[i + 1] += (P.mist[1] - D[i + 1]) * q; D[i + 2] += (P.mist[2] - D[i + 2]) * q; }
+    }
+  }
+}
+
+/* ───────────── water ───────────── */
+function addRipple(x, y, max) {
+  const fr = (y - HZ) / lakeH;
+  ripples.push({ x, y, r: 0, max: max * (0.5 + fr), sp: 6 + max * 0.25, life: 1, sq: 0.18 + 0.32 * fr });
+  if (ripples.length > 14) ripples.shift();
+}
+
+function drawLake(P, t, dt, sun, moon) {
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const rp = ripples[i];
+    rp.r += rp.sp * dt; rp.life = 1 - rp.r / rp.max;
+    if (rp.life <= 0) ripples.splice(i, 1);
+  }
+  let gl = null; // glitter path under the sun or moon
+  if (sun.alt > -0.02) {
+    const low = 1 - smooth(0, 0.4, sun.alt);
+    gl = { x: sun.x, spread: 9 + 6 * low, str: smooth(-0.02, 0.08, sun.alt) * (0.85 + 0.15 * low), c: mix([255, 250, 228], [255, 168, 88], low) };
+  } else if (moon.alt > -0.02) {
+    const low = 1 - smooth(0, 0.5, moon.alt);
+    gl = { x: moon.x, spread: 3 + 7 * low, str: smooth(-0.02, 0.08, moon.alt) * (0.35 + 0.65 * moonIllum) * (0.6 + 0.4 * low), c: [222, 232, 255] };
+  }
+  const wt = P.water, ringC = mix(P.skyH, [235, 240, 255], 0.45), crestC = mix(P.skyM, P.skyH, 0.5);
+  const NR = ripples.length;
+  for (let y = HZ; y < H; y++) {
+    const d = y - HZ, fr = (d + 1) / lakeH, amp = 0.3 + fr * 2.4;
+    const rowOff = Math.sin(d * 0.62 + t * 1.3) * amp * 0.6 + Math.sin(d * 0.21 - t * 0.8) * amp * 0.45;
+    const mk = 0.14 + 0.46 * fr, glW = gl ? 1 + fr * gl.spread : 0;
+    for (let x = 0; x < W; x++) {
+      let off = rowOff + (noise(x * 0.055 + t * 0.22, d * 0.42 - t * 0.35, 11) - 0.5) * amp * 1.8;
+      let ring = 0;
+      for (let k = 0; k < NR; k++) {
+        const rp = ripples[k], ex = x - rp.x, ey = (y - rp.y) / rp.sq, lim = rp.r + 2;
+        if (ex > lim || ex < -lim || ey > lim || ey < -lim) continue;
+        const dist = Math.sqrt(ex * ex + ey * ey);
+        for (let j = 0; j < 3; j++) {
+          const rr = rp.r - j * 4.5;
+          if (rr <= 0) break;
+          const df = dist - rr;
+          if (df > -1.3 && df < 1.3) { ring += rp.life * (1 - Math.abs(df) / 1.3) * (1 - j * 0.3); off += df > 0 ? 1.2 : -1.2; }
+        }
+      }
+      let sx = x + Math.round(off);
+      sx = sx < 0 ? 0 : sx >= W ? W - 1 : sx;
+      let sy = HZ - 1 - d + Math.round((noise(x * 0.07 + 5, d * 0.5 + t * 0.7, 13) - 0.5) * fr * 3);
+      sy = sy < 0 ? 0 : sy >= HZ ? HZ - 1 : sy;
+      const si = (sy * W + sx) << 2, o = (y * W + x) << 2, bv = BAYER[((y & 3) << 2) | (x & 3)];
+      let r = (D[si] + (wt[0] - D[si]) * mk) * 0.93;
+      let g = (D[si + 1] + (wt[1] - D[si + 1]) * mk) * 0.93;
+      let b = (D[si + 2] + (wt[2] - D[si + 2]) * mk) * 0.93;
+      if (d === 0) { r += (P.skyH[0] - r) * 0.25; g += (P.skyH[1] - g) * 0.25; b += (P.skyH[2] - b) * 0.25; }
+      const cr = noise(x * 0.12 - t * 0.3, d * 0.8 + t * 0.1, 21);
+      if (cr > 0.7 && (cr - 0.7) * 5 > bv) { r += (crestC[0] - r) * 0.3; g += (crestC[1] - g) * 0.3; b += (crestC[2] - b) * 0.3; }
+      if (gl) {
+        const dx = Math.abs(x - gl.x - Math.sin(d * 0.37 + t * 0.8) * fr * 2);
+        if (dx < glW) {
+          const p = 1 - dx / glW;
+          const g2 = noise(x * 0.4 - t * 0.9, d * 1.3 + t * 0.6, 31);
+          if (g2 > 1 - p * p * gl.str * 0.75 || hash(x, y, (t * 8) | 0) < p * gl.str * 0.06) {
+            r += (gl.c[0] - r) * 0.9; g += (gl.c[1] - g) * 0.9; b += (gl.c[2] - b) * 0.9;
+          }
+        }
+      }
+      if (ring > 0) {
+        const q = Math.min(1, Math.floor(ring * 3 + bv) / 3) * 0.7;
+        r += (ringC[0] - r) * q; g += (ringC[1] - g) * q; b += (ringC[2] - b) * q;
+      }
+      D[o] = r; D[o + 1] = g; D[o + 2] = b;
+    }
+  }
+}
+
+const BOAT = ['.........l.', '....o....|.', '...ooo...|.', '###########', '.#########.'];
+let nextWake = 0;
+function drawBoat(P, t) {
+  const span = W + 120, bx = Math.round(((t * 1.15 + (seed % 300)) % span) - 30);
+  if (bx < -14 || bx > W + 2) return;
+  const wy = HZ + Math.round(lakeH * 0.42), bob = Math.sin(t * 1.2) > 0.7 ? 1 : 0;
+  const hull = mix(mix(P.treeS, [0, 0, 0], 0.25), [72, 46, 32], 0.55 * (1 - P.night));
+  const lampOn = smooth(0.4, 0.85, P.night), lamp = mix([110, 96, 70], WARM, lampOn);
+  const n = BOAT.length, lampX = bx + 9, lampY = wy - n + bob;
+
+  for (let r = 0; r < n; r++) { // wobbly mirrored reflection
+    const ry = wy + bob + (n - 1 - r);
+    if (ry >= H) continue;
+    const wob = Math.round(Math.sin(ry * 0.7 + t * 1.6) * 0.8);
+    for (let c = 0; c < BOAT[r].length; c++) {
+      const ch = BOAT[r][c];
+      if (ch !== '.') blend(bx + c + wob, ry, ch === 'l' ? lamp : hull, ch === 'l' ? 0.6 : 0.45);
+    }
+  }
+  if (lampOn > 0.05) { // lantern light breaking up on the water
+    for (let k = n + 1; k <= n + 16; k++) {
+      const y = wy + k - n;
+      if (y >= H) break;
+      const x = lampX + Math.round(Math.sin(k * 0.8 + t * 2.2) * k * 0.1);
+      const a = (1 - (k - n) / 17) * lampOn * (noise(k * 0.5 - t * 1.5, x * 0.2, 41) > 0.45 ? 0.75 : 0.2);
+      blend(x, y, WARM, a);
+      if (k < n + 6) { blend(x - 1, y, WARM, a * 0.3); blend(x + 1, y, WARM, a * 0.3); }
+    }
+  }
+  for (let r = 0; r < n; r++) for (let c = 0; c < BOAT[r].length; c++) {
+    const ch = BOAT[r][c];
+    if (ch !== '.') put(bx + c, wy - n + bob + r, ch === 'l' ? lamp : hull);
+  }
+  if (lampOn > 0.05) {
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const dd = Math.hypot(dx, dy) / 4.5;
+      if (dd < 1 && (dx || dy)) dith(lampX + dx, lampY + dy, WARM, (1 - dd) ** 2 * 0.5 * lampOn, 4);
+    }
+  }
+  if (t > nextWake) { nextWake = t + 1.6; addRipple(bx + 1, wy, 7); }
+}
+
+function drawReeds(P, t) {
+  const base = mix(P.treeS, [0, 0, 0], 0.4), head = mix(base, [74, 48, 32], 0.6 * (1 - P.night) + 0.1);
+  const maxH = lakeH - 3;
+  for (const r of reeds) {
+    const h = Math.min(r.h, maxH);
+    const sway = Math.sin(t * 0.9 + r.ph) * 1.3 + Math.sin(t * 2.1 + r.ph * 1.7) * 0.35;
+    for (let i = 0; i < h; i++) {
+      const f = i / h, x = Math.round(r.x + (r.lean + sway) * f * f), y = H - 1 - i;
+      put(x, y, base);
+      if (r.blade && f < 0.3) put(x + 1, y, base);
+      if (r.cat && i >= h - 7 && i < h - 2) { put(x, y, head); put(x + 1, y, head); }
+    }
+  }
+}
+
+/* ───────────── HUD (3×5 pixel font) ───────────── */
+const FONT = {
+  A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110',
+  E: '111100110100111', F: '111100110100100', G: '011100101101011', H: '101101111101101',
+  I: '111010010010111', J: '001001001101010', K: '101101110101101', L: '100100100100111',
+  M: '101111111101101', N: '101111111111101', O: '010101101101010', P: '110101110100100',
+  Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
+  U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101',
+  Y: '101101010010010', Z: '111001010100111',
+  0: '111101101101111', 1: '010110010010111', 2: '110001010100111', 3: '110001010001110',
+  4: '101101111001001', 5: '111100110001110', 6: '011100110101010', 7: '111001010010010',
+  8: '010101010101010', 9: '010101011001110',
+  ':': '000010000010000', '.': '000000000000010', '-': '000000111000000', '/': '001001010100100',
+  '<': '001010100010001', '>': '100010001010100',
+  '+': '000010111010000', '?': '110001010000010', 'x': '000101010101000', ' ': '000000000000000',
+};
+function text(s, x, y, c, a) {
+  for (const ch of s) {
+    const g = FONT[ch] || FONT[ch.toUpperCase()];
+    if (g) for (let k = 0; k < 15; k++) if (g.charCodeAt(k) === 49) blend(x + (k % 3), y + ((k / 3) | 0), c, a);
+    x += 4;
+  }
+}
+function textS(s, x, y, c, a) { text(s, x + 1, y + 1, [0, 0, 0], a * 0.6); text(s, x, y, c, a); }
+
+const INK = [232, 236, 250], GOLD = [255, 214, 120], DIM = [130, 140, 175];
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+const CLOUD_NAMES = ['CLEAR SKY', 'FEW CLOUDS', 'CLOUDY'];
+// Every control is a named action so keys and taps on the help panel share one code path.
+const act = {
+  speed: (dir, wrap) => {
+    const n = speedIdx + dir;
+    speedIdx = wrap ? (n + SPEEDS.length) % SPEEDS.length : clamp(n, 0, SPEEDS.length - 1);
+    live = false; paused = false; say('TIME x' + SPEEDS[speedIdx]);
+  },
+  pause: () => { paused = !paused; live = false; say(paused ? 'TIME PAUSED' : 'TIME FLOWING'); },
+  live: () => { live = !live; paused = false; say(live ? 'LIVE CLOCK' : 'FREE TIME'); },
+  aurora: () => { auroraOn = !auroraOn; say(auroraOn ? 'AURORA ON' : 'AURORA OFF'); },
+  clouds: () => { cloudLevel = (cloudLevel + 1) % 3; say(CLOUD_NAMES[cloudLevel]); },
+  world: () => { seed = (Math.random() * 1e9) | 0; generate(); writeHash(); say('NEW LANDSCAPE'); },
+  full: () => toggleFullscreen(),
+  help: () => { showHelp = !showHelp; },
+};
+const HELP = [ // [key, description (text or live state), tap action]
+  [TOUCH ? 'TAP SKY' : 'CLICK SKY', 'SHOOTING STAR'],
+  [TOUCH ? 'TAP LAKE' : 'CLICK LAKE', 'RIPPLE'],
+  ['DRAG', 'SCRUB TIME'],
+  ['LEFT/RIGHT', 'SCRUB TIME'],
+  ['UP/DOWN', () => 'TIME SPEED x' + SPEEDS[speedIdx], () => act.speed(1, true)],
+  ['SPACE', () => (paused ? 'RESUME TIME' : 'PAUSE TIME'), act.pause],
+  ['L', () => 'LIVE CLOCK ' + (live ? 'ON' : 'OFF'), act.live],
+  ['A', () => 'AURORA ' + (auroraOn ? 'ON' : 'OFF'), act.aurora],
+  ['C', () => CLOUD_NAMES[cloudLevel], act.clouds],
+  ['N', 'NEW LANDSCAPE', act.world],
+  ['F', 'FULLSCREEN', act.full],
+  ['H', 'CLOSE', act.help],
+];
+const LH = 7;
+const helpBox = () => ({ x0: 5 + inset.l, y0: 5 + inset.t, pw: 112, ph: (HELP.length + (TOUCH ? 4 : 2)) * LH + 8 });
+function drawHelp() {
+  const { x0, y0, pw, ph } = helpBox();
+  for (let y = y0; y < y0 + ph; y++) for (let x = x0; x < x0 + pw; x++) {
+    const edge = y === y0 || y === y0 + ph - 1 || x === x0 || x === x0 + pw - 1;
+    blend(x, y, edge ? [150, 165, 220] : [3, 5, 14], edge ? 0.35 : 0.72);
+  }
+  textS('STARLAKE', x0 + 5, y0 + 5, GOLD, 1);
+  textS('SEED ' + seed, x0 + 45, y0 + 5, DIM, 1);
+  HELP.forEach(([k, v], i) => {
+    textS(k, x0 + 5, y0 + 5 + (i + 2) * LH, GOLD, 1);
+    textS(typeof v === 'function' ? v() : v, x0 + 50, y0 + 5 + (i + 2) * LH, INK, 1);
+  });
+  if (TOUCH) textS('TAP A LINE TO USE IT', x0 + 5, y0 + 5 + (HELP.length + 3) * LH, DIM, 1);
+}
+// Returns true when the tap landed on the open help panel (running that line's action, if any).
+function helpTap(x, y) {
+  const { x0, y0, pw, ph } = helpBox();
+  if (x < x0 || x >= x0 + pw || y < y0 || y >= y0 + ph) return false;
+  const row = HELP[Math.floor((y - y0 - 4) / LH) - 2];
+  if (row && row[2]) row[2]();
+  return true;
+}
+function drawHUD() {
+  const now = performance.now() / 1000;
+  const a = showHelp ? 1 : clamp(lastInput + 3.5 - now, 0, 1);
+  if (a > 0) {
+    const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
+    const s = (live ? 'LIVE' : paused ? 'PAUSED' : 'x' + SPEEDS[speedIdx]) + '  ' + String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+    textS(s, W - s.length * 4 - 3 - inset.r, H - 8 - inset.b, INK, a);
+    if (!showHelp) textS(TOUCH ? '?  HELP' : 'H  HELP', 4 + inset.l, H - 8 - inset.b, INK, a * 0.85);
+  }
+  if (showHelp) drawHelp();
+  if (toast && now < toast.until) {
+    const tw = toast.s.length * 4, hb = helpBox();
+    const tx = showHelp ? Math.max(hb.x0 + hb.pw + 4, ((W - tw) / 2) | 0) : ((W - tw) / 2) | 0; // keep clear of the help panel
+    textS(toast.s, tx, 6 + inset.t, INK, clamp(toast.until - now, 0, 1));
+  }
+}
+function say(s, secs = 1.8) { toast = { s, until: performance.now() / 1000 + secs }; }
+
+/* ───────────── main loop ───────────── */
+let lastT = 0, nextMeteor = 3, nextFish = 2, nextBirds = 8;
+function frame(ms) {
+  const t = ms / 1000, dt = Math.min(0.05, Math.max(0, t - lastT));
+  lastT = t;
+  if (scrub) { hour = (hour + scrub * dt * 2 + 24) % 24; live = false; }
+  else if (live) { const d = new Date(); hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; }
+  else if (!paused) hour = (hour + (dt * SPEEDS[speedIdx]) / 3600) % 24;
+
+  const P = (curP = paletteAt(hour));
+  const sun = body((hour - 5.9) / 12.5), moon = body((((hour - 18.6) % 24) + 24) % 24 / 12);
+
+  if (t > nextMeteor) { nextMeteor = t + 2.5 + Math.random() * 9; if (P.stars > 0.5) spawnMeteor(Math.random() * W, Math.random() * HZ * 0.5, Math.random() < 0.12); }
+  if (t > nextFish) { nextFish = t + 1.5 + Math.random() * 5; addRipple(Math.random() * W, HZ + 4 + Math.random() * (lakeH - 8), 8 + Math.random() * 8); }
+  if (t > nextBirds) { nextBirds = t + 14 + Math.random() * 30; if (P.night < 0.5) spawnFlock(); }
+
+  renderSky(P, t, sun, moon);
+  drawStars(P, t);
+  drawMeteors(P, dt);
+  drawSun(sun);
+  drawMoon(moon, P);
+  drawClouds(P, t);
+  const lb = sun.alt > 0 ? sun : moon.alt > 0 ? moon : sun.alt > moon.alt ? sun : moon;
+  drawTerrain(P, t, lb);
+  drawBirds(P, t, dt);
+  drawSmoke(P, t, dt);
+  drawFlies(P, t, dt);
+  drawMist(P, t);
+  drawLake(P, t, dt, sun, moon); // reflects everything drawn above the horizon
+  drawBoat(P, t);
+  drawReeds(P, t);
+  drawHUD();
+  ctx.putImageData(img, 0, 0);
+  requestAnimationFrame(frame);
+}
+
+/* ───────────── input ───────────── */
+const poke = () => { lastInput = performance.now() / 1000; };
+const toArt = e => {
+  const dpr = window.devicePixelRatio || 1;
+  return [Math.floor((e.clientX * dpr) / S), Math.floor((e.clientY * dpr) / S)];
+};
+function writeHash() { history.replaceState(null, '', '#seed=' + seed); }
+function toggleFullscreen() {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement) { (d.exitFullscreen || d.webkitExitFullscreen).call(d); return; }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) { say('USE SHARE > ADD TO HOME SCREEN', 3); return; } // iPhone Safari has no fullscreen API
+  const p = req.call(el);
+  if (p && p.catch) p.catch(() => {});
+}
+// Keep the screen from sleeping while the scene is in front (iPad as an ambient display).
+let wake = null;
+async function keepAwake() {
+  if (wake || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  try { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } catch { /* not allowed yet */ }
+}
+document.addEventListener('visibilitychange', keepAwake);
+
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  poke();
+  switch (e.key) {
+    case 'ArrowLeft': scrub = -1; e.preventDefault(); return;
+    case 'ArrowRight': scrub = 1; e.preventDefault(); return;
+    case 'ArrowUp': act.speed(1); e.preventDefault(); return;
+    case 'ArrowDown': act.speed(-1); e.preventDefault(); return;
+    case ' ': act.pause(); e.preventDefault(); return;
+  }
+  const fn = { l: act.live, a: act.aurora, c: act.clouds, n: act.world, f: act.full, h: act.help, '?': act.help }[e.key.toLowerCase()];
+  if (fn) fn();
+});
+addEventListener('keyup', e => {
+  if ((e.key === 'ArrowLeft' && scrub < 0) || (e.key === 'ArrowRight' && scrub > 0)) scrub = 0;
+});
+addEventListener('wheel', e => { poke(); live = false; hour = (hour + e.deltaY * 0.004 + 24) % 24; }, { passive: true });
+
+let drag = null;
+cv.addEventListener('pointerdown', e => { poke(); keepAwake(); drag = { x: e.clientX, x0: e.clientX, moved: false }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  poke();
+  if (!drag) return;
+  if (!drag.moved && Math.abs(e.clientX - drag.x0) > 8) drag.moved = true;
+  if (drag.moved) {
+    const dpr = window.devicePixelRatio || 1;
+    hour = (hour + (((e.clientX - drag.x) * dpr) / S) * 0.03 + 24) % 24;
+    live = false; drag.x = e.clientX;
+  }
+});
+cv.addEventListener('pointerup', e => {
+  const wasClick = drag && !drag.moved;
+  drag = null;
+  if (!wasClick) return;
+  const [x, y] = toArt(e);
+  if (showHelp && helpTap(x, y)) return;
+  if (y >= H - 12 - inset.b && x < 36 + inset.l) act.help();
+  else if (y >= HZ) addRipple(x, y, 18 + Math.random() * 8);
+  else if (curP && curP.stars > 0.25) spawnMeteor(x, y, Math.random() < 0.3);
+  else spawnFlock(x, y);
+});
+cv.addEventListener('pointercancel', () => { drag = null; });
+
+let resizeTimer = 0;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(setup, 120); });
+
+if (!params.has('seed')) writeHash();
+setup();
+poke();
+say('STARLAKE', 2.6);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
