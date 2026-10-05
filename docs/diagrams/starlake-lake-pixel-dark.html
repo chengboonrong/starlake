@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Starlake colors one lake pixel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #0a1128;
+      --color-ink:     #e9edf7;
+      --color-muted:   #93a1c8;
+      --color-accent:  #f2b45a;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · Starlake</p>
+    <h1>How Starlake colors one lake pixel</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="starlake-lake-pixel-dark-title starlake-lake-pixel-dark-desc">
+        <title id="starlake-lake-pixel-dark-title">How Starlake colors one lake pixel</title>
+        <desc id="starlake-lake-pixel-dark-desc">Flowchart of the four steps that color a lake pixel: shift by the waves, read the mirrored row above the horizon, tint toward the water color, and add glints.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#93a1c8"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f2b45a"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6f9fe0"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#0a1128"/>
+<line x1="360" y1="148" x2="360" y2="186" stroke="#93a1c8" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="360" y1="236" x2="360" y2="274" stroke="#93a1c8" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="360" y1="324" x2="360" y2="362" stroke="#93a1c8" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="360" y1="412" x2="360" y2="450" stroke="#93a1c8" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="240" y="100" width="240" height="48" rx="20" fill="#0a1128"/>
+<rect x="240" y="100" width="240" height="48" rx="20" fill="rgba(147,161,200,0.10)" stroke="#6c7eb4" stroke-width="1"/>
+<text x="360" y="122" fill="#e9edf7" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Lake pixel</text>
+<text x="360" y="136" fill="#93a1c8" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">(x, HZ + d)</text>
+<rect x="240" y="188" width="240" height="48" rx="6" fill="#0a1128"/>
+<rect x="240" y="188" width="240" height="48" rx="6" fill="#121b3a" stroke="#e9edf7" stroke-width="1"/>
+<text x="360" y="210" fill="#e9edf7" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Shift by the waves</text>
+<text x="360" y="224" fill="#93a1c8" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">x + wave(d) + ripple</text>
+<rect x="240" y="276" width="240" height="48" rx="6" fill="#0a1128"/>
+<rect x="240" y="276" width="240" height="48" rx="6" fill="rgba(242,180,90,0.12)" stroke="#f2b45a" stroke-width="1"/>
+<text x="360" y="298" fill="#e9edf7" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Read the mirror row</text>
+<text x="360" y="312" fill="#93a1c8" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">row HZ − 1 − d</text>
+<rect x="240" y="364" width="240" height="48" rx="6" fill="#0a1128"/>
+<rect x="240" y="364" width="240" height="48" rx="6" fill="#121b3a" stroke="#e9edf7" stroke-width="1"/>
+<text x="360" y="386" fill="#e9edf7" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Tint toward the water</text>
+<text x="360" y="400" fill="#93a1c8" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">stronger as d grows</text>
+<rect x="240" y="452" width="240" height="48" rx="6" fill="#0a1128"/>
+<rect x="240" y="452" width="240" height="48" rx="6" fill="#121b3a" stroke="#e9edf7" stroke-width="1"/>
+<text x="360" y="474" fill="#e9edf7" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Add glints</text>
+<text x="360" y="488" fill="#93a1c8" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">wave crests · sun or moon path</text>
+<path d="M 512 210 Q 498 210 486 212" fill="none" stroke="rgba(233,237,247,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="484" cy="212" r="2" fill="#e9edf7"/>
+<text x="520" y="206" fill="#e9edf7" font-size="14" font-family="'Instrument Serif', 'Noto Serif', serif" font-style="italic">Waves grow with depth. The water stays</text>
+<text x="520" y="226" fill="#e9edf7" font-size="14" font-family="'Instrument Serif', 'Noto Serif', serif" font-style="italic">still at the horizon and breaks up near you.</text>
+<path d="M 512 298 Q 498 298 486 300" fill="none" stroke="rgba(233,237,247,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<circle cx="484" cy="300" r="2" fill="#e9edf7"/>
+<text x="520" y="294" fill="#e9edf7" font-size="14" font-family="'Instrument Serif', 'Noto Serif', serif" font-style="italic">Anything painted above the horizon</text>
+<text x="520" y="314" fill="#e9edf7" font-size="14" font-family="'Instrument Serif', 'Noto Serif', serif" font-style="italic">shows up in the water with no extra code.</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Starlake paints each frame back to front</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f6f3ec;
+      --color-ink:     #0c1739;
+      --color-muted:   #3e5389;
+      --color-accent:  #c8781a;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Layer stack · Starlake</p>
+    <h1>Starlake paints each frame back to front</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="starlake-paint-order-title starlake-paint-order-desc">
+        <title id="starlake-paint-order-title">Starlake paints each frame back to front</title>
+        <desc id="starlake-paint-order-desc">Layer stack of the six paint passes in a Starlake frame, from the sky up to the clock, with the lake pass highlighted because it mirrors the sky, land, and life layers painted before it.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3e5389"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#c8781a"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e66a8"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#f6f3ec"/>
+<text x="40" y="76" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">PAINTED LAST</text>
+<line x1="88" y1="96" x2="88" y2="448" stroke="rgba(12,23,57,0.30)" stroke-width="1"/>
+<polygon points="84,96 92,96 88,88" fill="#3e5389"/>
+<text x="40" y="476" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">PAINTED FIRST</text>
+<path d="M 776 432 H 828 A 8 8 0 0 0 836 424 V 232 A 8 8 0 0 0 828 224 H 778" fill="none" stroke="#3e5389" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M 776 368 H 816 A 8 8 0 0 0 824 360 V 248 A 8 8 0 0 0 816 240 H 778" fill="none" stroke="#3e5389" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M 776 304 H 804 A 8 8 0 0 0 812 296 V 264 A 8 8 0 0 0 804 256 H 778" fill="none" stroke="#3e5389" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="844" y="320" width="52" height="12" rx="2" fill="#f6f3ec"/>
+<text x="848" y="329" fill="#6c7eb4" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">MIRRORED</text>
+<rect x="144" y="80" width="632" height="64" fill="#ffffff"/>
+<line x1="144" y1="144" x2="776" y2="144" stroke="rgba(12,23,57,0.12)" stroke-width="1"/>
+<text x="164" y="116" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L6</text>
+<text x="212" y="117" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Clock and help panel</text>
+<text x="756" y="116" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">drawHUD</text>
+<rect x="144" y="144" width="632" height="64" fill="#ffffff"/>
+<line x1="144" y1="208" x2="776" y2="208" stroke="rgba(12,23,57,0.12)" stroke-width="1"/>
+<text x="164" y="180" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L5</text>
+<text x="212" y="181" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Boat and reeds</text>
+<text x="756" y="180" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">drawBoat · drawReeds</text>
+<rect x="144" y="208" width="632" height="64" fill="rgba(200,120,26,0.10)"/>
+<line x1="144" y1="272" x2="776" y2="272" stroke="rgba(12,23,57,0.12)" stroke-width="1"/>
+<text x="164" y="244" fill="#c8781a" font-size="8" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L4</text>
+<text x="212" y="245" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Lake</text>
+<text x="756" y="244" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">drawLake</text>
+<rect x="144" y="272" width="632" height="64" fill="#ffffff"/>
+<line x1="144" y1="336" x2="776" y2="336" stroke="rgba(12,23,57,0.12)" stroke-width="1"/>
+<text x="164" y="308" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L3</text>
+<text x="212" y="309" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Birds, smoke, fireflies, mist</text>
+<text x="756" y="308" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">drawBirds … drawMist</text>
+<rect x="144" y="336" width="632" height="64" fill="#ffffff"/>
+<line x1="144" y1="400" x2="776" y2="400" stroke="rgba(12,23,57,0.12)" stroke-width="1"/>
+<text x="164" y="372" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L2</text>
+<text x="212" y="373" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Mountains, trees, cabin</text>
+<text x="756" y="372" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">drawTerrain</text>
+<rect x="144" y="400" width="632" height="64" fill="#ffffff"/>
+<text x="164" y="436" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L1</text>
+<text x="212" y="437" fill="#0c1739" font-size="14" font-weight="600" font-family="'Geist', sans-serif">Sky, stars, sun, moon, clouds</text>
+<text x="756" y="436" fill="#3e5389" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.04em">renderSky … drawClouds</text>
+<rect x="144" y="80" width="632" height="384" fill="none" stroke="#3e5389" stroke-width="1"/>
+<rect x="144" y="208" width="632" height="64" fill="none" stroke="#c8781a" stroke-width="1"/>
+<text x="144" y="516" fill="#3e5389" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">WHY THIS ORDER</text>
+<text x="264" y="518" fill="#0c1739" font-size="14" font-family="'Instrument Serif', 'Noto Serif', serif" font-style="italic">The lake pass runs after the sky, land, and life, so it copies their rows into the water.</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

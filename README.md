@@ -67,16 +67,7 @@ Settings can go in the URL hash, e.g. `index.html#seed=4242&t=22.5`.
 
 ### Build the world once, then paint every frame
 
-The script has two phases. `setup()` and `generate()` run on load, on resize, and when you press **N**. They pick the canvas size and build every part of the landscape that never moves. `frame()` then runs on every animation frame. It works out the time of day and repaints the whole picture into one pixel buffer.
-
-```mermaid
-flowchart LR
-    hash["URL hash<br/>seed, t, speed"] --> setup["setup()<br/>canvas size and pixel scale"]
-    setup --> gen["generate()<br/>landscape from the seed"]
-    gen --> frame["frame()<br/>repaint the pixel buffer"]
-    frame --> put["putImageData()<br/>copy the buffer to the canvas"]
-    put -->|next animation frame| frame
-```
+The script has two phases. `setup()` and `generate()` run on load, on resize, and when you press **N**. They pick the canvas size and build every part of the landscape that never moves. `frame()` then runs on every animation frame. It works out the time of day and repaints the whole picture into one pixel buffer. At the end of the frame, `putImageData()` copies that buffer to the canvas.
 
 ### Draw on a tiny canvas and scale it up
 
@@ -90,35 +81,21 @@ Pixel art can't blend colors smoothly, so Starlake fakes the blend with ordered 
 
 `generate()` feeds the seed into a small random number generator (`rng`, a mulberry32) and into seeded value noise (`noise` and `fbm`). The same seed always gives the same landscape, which is why the seed goes in the URL.
 
-```mermaid
-flowchart TD
-    seed(["seed"]) --> heights["Three height lines, one value per column<br/>far: ridged noise plus one tall hero peak<br/>mid: rolling fbm hills<br/>near: hills that rise only toward the screen edges"]
-    heights --> cabin["Cabin: flattest spot on one side hill,<br/>leveled into a terrace"]
-    heights --> map["Layer map for every pixel above the horizon<br/>lay: which layer owns the pixel<br/>face: which way the rock faces, from -1 to 1<br/>ridge: whether it is the top edge"]
-    cabin --> map
-    map --> extras["Details stamped into the map:<br/>snow, far treeline, pines, cabin sprite"]
-    seed --> sky["Milky Way brightness map<br/>and about W × HZ / 30 stars"]
-    seed --> fg["Reeds and fireflies"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/starlake-world-from-seed-dark.png">
+  <img src="docs/diagrams/starlake-world-from-seed.png" alt="Tree: one seed produces the terrain heights, the night sky, and the foreground. The terrain heights choose the cabin site and fill the layer map, which is highlighted." width="960">
+</picture>
 
-The layer map stores what each pixel is, not its color. Color depends on the time of day and on where the light comes from, and both change every frame. To find which way a rock pixel faces, `generate()` reads the slope of the ridge line above it. Pixels near the ridge use a narrow slope window, so small crags show. Deeper pixels use a wider window and merge into broad faces. A little noise in the sample position keeps the line between two faces ragged.
+The layer map stores what each pixel is, not its color. Color depends on the time of day and on where the light comes from, and both change every frame. To find which way a rock pixel faces, `generate()` reads the slope of the ridge line above it. Pixels near the ridge use a narrow slope window, so small crags show. Deeper pixels use a wider window and merge into broad faces. A little noise in the sample position keeps the line between two faces ragged. Snow, the far treeline, the pines, and the cabin sprite are stamped into the same map afterward.
 
 ### Paint a frame from back to front
 
 `frame()` paints in a fixed order. Each step draws over the steps before it, so the order decides what hides what. The mountains hide the moon as it sets, and the clouds hide the stars.
 
-```mermaid
-flowchart TD
-    time["Advance the hour<br/>speed, pause, or live clock"] --> pal["paletteAt(hour)<br/>blend the two nearest palettes"]
-    pal --> sky["renderSky<br/>dithered gradient, sun and moon glow,<br/>Milky Way, aurora"]
-    sky --> stars["drawStars, drawMeteors"]
-    stars --> bodies["drawSun, drawMoon"]
-    bodies --> clouds["drawClouds"]
-    clouds --> land["drawTerrain<br/>color the layer map by face and light side"]
-    land --> life["drawBirds, drawSmoke, drawFlies, drawMist"]
-    life --> lake["drawLake<br/>reflect every row above the horizon"]
-    lake --> front["drawBoat, drawReeds, drawHUD"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/starlake-paint-order-dark.png">
+  <img src="docs/diagrams/starlake-paint-order.png" alt="Layer stack of the six paint passes, from the sky at the bottom to the clock and help panel on top. The lake layer is highlighted, with arrows showing it mirrors the sky, land, and life layers below it." width="960">
+</picture>
 
 `drawLake` runs late on purpose. It builds the water by reading the rows already painted above the horizon, so everything drawn before it appears in the reflection with no extra code. That includes the moon, shooting stars, fireflies, the cabin window, and the chimney smoke. The boat and the reeds sit on the water, so they come after `drawLake`, and the boat draws its own reflection and lantern streak.
 
@@ -126,13 +103,10 @@ flowchart TD
 
 For a lake pixel at depth `d` below the horizon, `drawLake` copies the pixel at row `HZ - 1 - d`, its mirror position. Before the read, it shifts the column by a wave offset. The offset grows with depth. Water near the horizon stays almost still, and water near the viewer breaks the reflection into strips.
 
-```mermaid
-flowchart LR
-    px["Lake pixel<br/>(x, HZ + d)"] --> wave["Shift x by the wave offset<br/>for row d, plus any ripple ring"]
-    wave --> read["Read the pixel at<br/>(x', HZ - 1 - d)"]
-    read --> tint["Blend toward the water color,<br/>more for larger d"]
-    tint --> glint["Add wave crests and the<br/>glitter path under the sun or moon"]
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/starlake-lake-pixel-dark.png">
+  <img src="docs/diagrams/starlake-lake-pixel.png" alt="Flowchart for one lake pixel: shift by the waves, read the mirror row (highlighted), tint toward the water, add glints." width="960">
+</picture>
 
 Ripples are ellipses that flatten toward the horizon, so a ring far away looks thin and a ring close by looks round. Each ring also moves the read position by one pixel, which bends the reflection around it. Clicks add ripples, the boat leaves a wake, and fish surface every few seconds. At most 14 ripples exist at once.
 
@@ -167,3 +141,5 @@ Claude Code wrote Starlake in one session. It checked each change in headless Ch
 - Rock faces had noisy checkerboard patches.
 - The sun's glare path on the water was too thin at noon.
 - The pixel-font `N` read as a lowercase `n`.
+
+The diagrams are self-contained HTML files in `docs/diagrams/`, drawn with the [diagram-design](https://github.com/cathrynlavery/diagram-design) skill in colors taken from the scene. Each one is exported as a light and a dark PNG, and the README shows the one that matches your GitHub theme.
