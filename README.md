@@ -2,15 +2,17 @@
 
 A living pixel-art lake that runs in the browser. One HTML file, no dependencies.
 
+**Open it: https://chengboonrong.github.io/starlake/**
+
 ![Starlake at night](preview.png)
 
 Each visit generates a new landscape (mountains, forest, a cabin on the shore) from a seed. The lake reflects everything above it, and the scene runs through a full day and night: aurora, shooting stars, fireflies, chimney smoke, a lantern-lit boat drifting across, birds by day. The moon shows today's real phase.
 
 ## Run it
 
-Open `index.html` in a browser.
+Open the link above, or open `index.html` in a browser. On an iPad or iPhone, Share → **Add to Home Screen** on the link runs it full screen.
 
-On an iPad or iPhone, load it over HTTP instead (the Files app preview doesn't run scripts). From this folder:
+To run your own copy on an iPad, load it over HTTP (the Files app preview doesn't run scripts). From this folder:
 
 ```sh
 python3 -m http.server 8765
