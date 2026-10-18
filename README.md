@@ -37,7 +37,7 @@ Then open `http://<your-computer's-ip>:8765` in Safari. Share → **Add to Home 
 
 `Starlake.heic` is a macOS dynamic wallpaper: one landscape (seed 616471928) in 14 still frames that macOS swaps by your clock, from aurora and moonlight at night through sunrise, noon and sunset. It needs no app and no Location Services.
 
-To use it, download [Starlake.heic](https://github.com/chengboonrong/starlake/releases/latest/download/Starlake.heic), right-click it in Finder and choose **Set Desktop Picture**. Or add it in System Settings → Wallpaper. Keep the file somewhere permanent, not in Downloads, because macOS reads it from where it is. The wallpaper's menu offers Dynamic (follows the clock), Light (noon) and Dark (night).
+To use it, download [Starlake.heic](https://github.com/chengboonrong/starlake/releases/latest/download/Starlake.heic), right-click it in Finder and choose **Set Desktop Picture** (on some Macs it's under **Services** or **Quick Actions**, and it carries your system language's name). Or add it in System Settings → Wallpaper. Keep the file somewhere permanent, not in Downloads, because macOS reads it from where it is. The wallpaper's menu offers Dynamic (follows the clock), Light (noon) and Dark (night).
 
 To rebuild it, for example with another seed, run `wallpaper/build.sh [seed]`. It renders the frames with headless Chrome (set `CHROME` to its binary if it isn't in `/Applications`) and packs them with `wallpaper/make-heic.swift`, which needs only the Swift that comes with Xcode's command line tools.
 
