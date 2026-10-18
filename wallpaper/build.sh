@@ -6,6 +6,7 @@ set -e
 cd "$(dirname "$0")"
 SEED=${1:-616471928}
 CHROME=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}
+[ -x "$CHROME" ] || { echo "Chrome not found at $CHROME; set CHROME to its binary" >&2; exit 1; }
 # One frame per sky phase in index.html's KEYS, plus extras where the light changes fastest.
 HOURS="1 5.6 6 6.4 7.8 10 12.5 16.4 17.3 18.1 18.6 19 19.9 22"
 

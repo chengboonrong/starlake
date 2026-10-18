@@ -5,6 +5,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let args = CommandLine.arguments
+guard args.count > 4 else { fatalError("usage: swift make-heic.swift out.heic <light hour> <dark hour> frames/*.png") }
 let out = URL(fileURLWithPath: args[1])
 let light = Double(args[2])!, dark = Double(args[3])!
 let frames = args.dropFirst(4)
@@ -27,7 +28,7 @@ CGImageMetadataSetTagWithPath(meta, nil, "apple_desktop:h24" as CFString, tag)
 let dest = CGImageDestinationCreateWithURL(out as CFURL, UTType.heic.identifier as CFString, frames.count, nil)!
 for (n, (path, _)) in frames.enumerated() {
   let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil)!
-  let opts = [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary
+  let opts = [kCGImageDestinationLossyCompressionQuality: 1.0] as CFDictionary // 1.0 keeps pixel-art edges exact
   CGImageDestinationAddImageAndMetadata(dest, CGImageSourceCreateImageAtIndex(src, 0, nil)!, n == 0 ? meta : nil, opts)
 }
 guard CGImageDestinationFinalize(dest) else { fatalError("could not write \(out.path)") }

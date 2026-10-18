@@ -19,7 +19,7 @@ What you see changes with the hour:
 - Sunrise and sunset bring their own sky colors and low mist over the water.
 - At every hour, chimney smoke rises, a rowboat drifts across the lake, fish leave ripples, and the reeds sway.
 
-Everything is drawn by `index.html`, about 1,000 lines of plain JavaScript with no libraries, image files, or build step. `apple-touch-icon.png` and `preview.png` exist only for the home-screen icon and this README.
+Everything is drawn by `index.html`, about 1,000 lines of plain JavaScript with no libraries, image files, or build step. `apple-touch-icon.png` and `preview.png` exist only for the home-screen icon and this README, and `wallpaper/` only builds the Mac wallpaper.
 
 ## Run it
 
