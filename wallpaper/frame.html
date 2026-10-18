@@ -1,4 +1,8 @@
 <!doctype html>
-<!-- Holds the scene at exactly 6016x3384: headless Chrome reports a shorter window than it screenshots. -->
-<body style="margin:0"><iframe style="border:0;display:block;width:6016px;height:3384px"></iframe>
-<script>document.querySelector('iframe').src = '../index.html' + location.hash;</script>
+<!-- Holds the scene at exactly #w x #h: headless Chrome reports a shorter window than it screenshots. -->
+<body style="margin:0"><iframe style="border:0;display:block"></iframe>
+<script>
+const f = document.querySelector('iframe'), p = new URLSearchParams(location.hash.slice(1));
+f.style.width = p.get('w') + 'px'; f.style.height = p.get('h') + 'px';
+f.src = '../index.html' + location.hash;
+</script>

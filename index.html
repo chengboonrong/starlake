@@ -159,6 +159,7 @@ let live = params.get('live') === '1';
 let auroraOn = params.get('aurora') !== '0';
 let cloudLevel = params.has('clouds') ? clamp(parseInt(params.get('clouds'), 10) || 0, 0, 2) : 1;
 let showHelp = params.get('help') === '1';
+const rows = parseInt(params.get('rows'), 10) || 165; // art pixels across the short side
 let lastInput = 0, toast = null, scrub = 0, curP = null;
 
 // Real moon phase for today (0 new, 0.5 full), floored to a thin crescent so the lake always has a moon path.
@@ -200,7 +201,7 @@ function dith(x, y, c, a, lv) {
 function setup() {
   const dpr = window.devicePixelRatio || 1;
   const dw = Math.round(innerWidth * dpr), dh = Math.round(innerHeight * dpr);
-  S = Math.max(1, Math.floor(Math.min(dw, dh) / 165));
+  S = Math.max(1, Math.floor(Math.min(dw, dh) / rows));
   W = Math.ceil(dw / S); H = Math.ceil(dh / S);
   HZ = Math.round(H * 0.6); lakeH = H - HZ;
   const cs = getComputedStyle(document.getElementById('safe')), art = v => Math.ceil(((parseFloat(v) || 0) * dpr) / S);

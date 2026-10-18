@@ -1,4 +1,5 @@
-// Packs PNG frames named by hour (6.4.png = 06:24) into a macOS dynamic wallpaper that follows the clock.
+// Packs art-size PNG frames named by hour (6.4.png = 06:24) into a 6016x3384 macOS dynamic wallpaper that
+// follows the clock.
 // Usage: swift make-heic.swift out.heic <light hour> <dark hour> frames/*.png
 import Foundation
 import ImageIO
@@ -25,11 +26,22 @@ CGImageMetadataRegisterNamespaceForPrefix(meta, ns, "apple_desktop" as CFString,
 let tag = CGImageMetadataTagCreate(ns, "apple_desktop" as CFString, "h24" as CFString, .string, plist.base64EncodedString() as CFString)!
 CGImageMetadataSetTagWithPath(meta, nil, "apple_desktop:h24" as CFString, tag)
 
+// Enlarge by a whole number with no smoothing so every art pixel stays a crisp square, keep the top-left
+// corner and crop to 6016x3384, the largest Mac display.
+func enlarge(_ img: CGImage) -> CGImage {
+  let w = 6016, h = 3384, k = max((w + img.width - 1) / img.width, (h + img.height - 1) / img.height)
+  let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+  ctx.interpolationQuality = .none
+  ctx.draw(img, in: CGRect(x: 0, y: h - img.height * k, width: img.width * k, height: img.height * k))
+  return ctx.makeImage()!
+}
+
 let dest = CGImageDestinationCreateWithURL(out as CFURL, UTType.heic.identifier as CFString, frames.count, nil)!
 for (n, (path, _)) in frames.enumerated() {
   let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil)!
   let opts = [kCGImageDestinationLossyCompressionQuality: 1.0] as CFDictionary // 1.0 keeps pixel-art edges exact
-  CGImageDestinationAddImageAndMetadata(dest, CGImageSourceCreateImageAtIndex(src, 0, nil)!, n == 0 ? meta : nil, opts)
+  CGImageDestinationAddImageAndMetadata(dest, enlarge(CGImageSourceCreateImageAtIndex(src, 0, nil)!), n == 0 ? meta : nil, opts)
 }
 guard CGImageDestinationFinalize(dest) else { fatalError("could not write \(out.path)") }
 
