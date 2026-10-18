@@ -844,6 +844,7 @@ const act = {
   clouds: () => { cloudLevel = (cloudLevel + 1) % 3; say(CLOUD_NAMES[cloudLevel]); },
   world: () => { seed = (Math.random() * 1e9) | 0; generate(); writeHash(); say('NEW LANDSCAPE'); },
   full: () => toggleFullscreen(),
+  wallpaper: () => open('https://github.com/chengboonrong/starlake/releases/latest'),
   help: () => { showHelp = !showHelp; },
 };
 const HELP = [ // [key, description (text or live state), tap action]
@@ -858,6 +859,7 @@ const HELP = [ // [key, description (text or live state), tap action]
   ['C', () => CLOUD_NAMES[cloudLevel], act.clouds],
   ['N', 'NEW LANDSCAPE', act.world],
   ['F', 'FULLSCREEN', act.full],
+  ['W', 'MAC WALLPAPER', act.wallpaper],
   ['H', 'CLOSE', act.help],
 ];
 const LH = 7;
@@ -971,7 +973,7 @@ addEventListener('keydown', e => {
     case 'ArrowDown': act.speed(-1); e.preventDefault(); return;
     case ' ': act.pause(); e.preventDefault(); return;
   }
-  const fn = { l: act.live, a: act.aurora, c: act.clouds, n: act.world, f: act.full, h: act.help, '?': act.help }[e.key.toLowerCase()];
+  const fn = { l: act.live, a: act.aurora, c: act.clouds, n: act.world, f: act.full, w: act.wallpaper, h: act.help, '?': act.help }[e.key.toLowerCase()];
   if (fn) fn();
 });
 addEventListener('keyup', e => {
